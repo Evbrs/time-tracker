@@ -53,7 +53,7 @@ async function writeBlobJson<T>(name: string, data: T[]): Promise<void> {
     console.log(`[writeBlobJson] Writing ${data.length} items to ${name}`)
     const { put } = await import('@vercel/blob')
     const result = await put(`time-tracker/${name}.json`, JSON.stringify(data), {
-      access: 'public',
+      access: 'private',
       addRandomSuffix: false,
       allowOverwrite: true,
       contentType: 'application/json',
