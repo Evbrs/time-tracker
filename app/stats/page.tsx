@@ -353,10 +353,23 @@ export default function StatsPage() {
                         return (
                           <tr key={entry.id} className="border-b border-gray-100 hover:bg-gray-50">
                             <td className="px-4 py-2 text-gray-900 whitespace-nowrap">{formatDateFr(entry.date)}</td>
-                            <td className="px-4 py-2 text-gray-600 whitespace-nowrap">
-                              {entry.startTime} - {entry.endTime}
+                            <td className="px-4 py-2 text-gray-600">
+                              {entry.ranges && entry.ranges.length > 0
+                                ? entry.ranges.map((r, i) => (
+                                    <span key={i}>
+                                      {i > 0 && <span className="text-gray-300 mx-1">|</span>}
+                                      {r.start}-{r.end}
+                                    </span>
+                                  ))
+                                : <span className="whitespace-nowrap">{entry.startTime} - {entry.endTime}</span>
+                              }
                             </td>
-                            <td className="px-4 py-2 text-center text-gray-500">{entry.breakMinutes}min</td>
+                            <td className="px-4 py-2 text-center text-gray-500">
+                              {entry.ranges && entry.ranges.length > 0
+                                ? <span className="text-xs text-indigo-500">{entry.ranges.length} plages</span>
+                                : `${entry.breakMinutes}min`
+                              }
+                            </td>
                             <td className="px-4 py-2 text-right font-medium text-gray-900">{formatHours(hours)}</td>
                             <td className={`px-4 py-2 text-right font-medium ${diffFormatted.className}`}>
                               {diffFormatted.text}

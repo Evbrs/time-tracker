@@ -5,13 +5,19 @@ export interface Employee {
   createdAt: string
 }
 
+export interface TimeRange {
+  start: string // HH:MM
+  end: string // HH:MM
+}
+
 export interface WorkDay {
   id: string
   employeeId: string
   date: string // YYYY-MM-DD
-  startTime: string // HH:MM
-  endTime: string // HH:MM
-  breakMinutes: number // lunch/break duration in minutes
+  startTime: string // HH:MM - used in simple mode
+  endTime: string // HH:MM - used in simple mode
+  breakMinutes: number // break duration in minutes - used in simple mode
+  ranges?: TimeRange[] // optional: multiple time slots per day
   notes: string
   createdAt: string
 }

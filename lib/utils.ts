@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { WorkDay, PeriodStats } from './types'
+import { WorkDay, PeriodStats, TimeRange } from './types'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -14,12 +14,28 @@ export function getDateString(date: Date = new Date()): string {
   return date.toISOString().split('T')[0]
 }
 
+/** Calculate minutes from a HH:MM string */
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+/** Calculate worked hours for a single TimeRange */
+export function calculateRangeHours(range: TimeRange): number {
+  let start = timeToMinutes(range.start)
+  let end = timeToMinutes(range.end)
+  // Handle overnight (e.g. 21:00 - 00:00)
+  if (end <= start) end += 24 * 60
+  return Math.max(0, (end - start) / 60)
+}
+
 /** Calculate worked hours for a single WorkDay entry */
 export function calculateDayHours(entry: WorkDay): number {
-  const [sh, sm] = entry.startTime.split(':').map(Number)
-  const [eh, em] = entry.endTime.split(':').map(Number)
-  const startMinutes = sh * 60 + sm
-  const endMinutes = eh * 60 + em
+  if (entry.ranges && entry.ranges.length > 0) {
+    return entry.ranges.reduce((sum, r) => sum + calculateRangeHours(r), 0)
+  }
+  const startMinutes = timeToMinutes(entry.startTime)
+  const endMinutes = timeToMinutes(entry.endTime)
   const workedMinutes = endMinutes - startMinutes - entry.breakMinutes
   return Math.max(0, workedMinutes / 60)
 }
