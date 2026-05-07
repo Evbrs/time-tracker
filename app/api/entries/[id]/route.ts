@@ -1,3 +1,4 @@
+import { NextResponse } from 'next/server'
 import { getById, upsert, remove } from '@/lib/storage'
 import { TimeEntry } from '@/lib/types'
 
@@ -7,7 +8,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const entry = await getById<TimeEntry>('entries', id)
   if (!entry) {
-    return Response.json({ error: 'Entry not found' }, { status: 404 })
+    return NextResponse.json({ error: 'Entry not found' }, { status: 404 })
   }
 
   const updated: TimeEntry = {
@@ -16,11 +17,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   await upsert('entries', updated)
-  return Response.json(updated)
+  return NextResponse.json(updated)
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   await remove('entries', id)
-  return Response.json({ success: true })
+  return NextResponse.json({ success: true })
 }
