@@ -34,7 +34,7 @@ async function readBlobJson<T>(name: string): Promise<T[]> {
 async function writeBlobJson<T>(name: string, data: T[]): Promise<void> {
   const { put } = await import('@vercel/blob')
   await put(`time-tracker/${name}.json`, JSON.stringify(data), {
-    access: 'private',
+    access: 'public',
     addRandomSuffix: false,
     allowOverwrite: true,
     contentType: 'application/json',
