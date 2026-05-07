@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server'
 import { getAll } from '@/lib/storage'
 import { Employee, TimeEntry, DailyReport } from '@/lib/types'
 import { calculateHours, getDateString } from '@/lib/utils'
@@ -16,7 +15,10 @@ export async function GET(request: Request) {
   if (employeeId && date) {
     const employee = employees.find((e) => e.id === employeeId)
     if (!employee) {
-      return NextResponse.json({ error: 'Employee not found' }, { status: 404 })
+      return new Response(JSON.stringify({ error: 'Employee not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      })
     }
 
     const dayEntries = entries.filter((e) => e.employeeId === employeeId && getDateString(new Date(e.checkIn)) === date)
@@ -46,5 +48,7 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json(reports)
+  return new Response(JSON.stringify(reports), {
+    headers: { 'Content-Type': 'application/json' },
+  })
 }

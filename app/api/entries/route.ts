@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server'
 import { getAll, upsert } from '@/lib/storage'
 import { TimeEntry } from '@/lib/types'
 import { timeEntrySchema } from '@/lib/validation'
@@ -19,7 +18,9 @@ export async function GET(request: Request) {
     filtered = filtered.filter((e) => getDateString(new Date(e.checkIn)) === date)
   }
 
-  return NextResponse.json(filtered)
+  return new Response(JSON.stringify(filtered), {
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
 export async function POST(request: Request) {
@@ -27,7 +28,10 @@ export async function POST(request: Request) {
 
   const validation = timeEntrySchema.safeParse(body)
   if (!validation.success) {
-    return NextResponse.json({ error: validation.error.errors }, { status: 400 })
+    return new Response(JSON.stringify({ error: validation.error.errors }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   const entry = {
@@ -40,5 +44,8 @@ export async function POST(request: Request) {
   }
 
   await upsert('entries', entry as TimeEntry)
-  return NextResponse.json(entry, { status: 201 })
+  return new Response(JSON.stringify(entry), {
+    status: 201,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
