@@ -1,41 +1,118 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { TimeEntry } from './types'
+import { WorkDay, PeriodStats } from './types'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatTime(date: string): string {
-  return new Date(date).toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-export function formatDate(date: string): string {
-  return new Date(date).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
-
-export function calculateHours(entries: TimeEntry[]): number {
-  return entries.reduce((acc, entry) => {
-    if (!entry.checkOut) return acc
-    const checkIn = new Date(entry.checkIn).getTime()
-    const checkOut = new Date(entry.checkOut).getTime()
-    const ms = checkOut - checkIn - entry.breakTime * 60000
-    return acc + ms / (1000 * 60 * 60)
-  }, 0)
+export function generateId(): string {
+  return Math.random().toString(36).substring(2, 11) + Date.now().toString(36)
 }
 
 export function getDateString(date: Date = new Date()): string {
   return date.toISOString().split('T')[0]
 }
 
-export function generateId(): string {
-  return Math.random().toString(36).substring(2, 11)
+/** Calculate worked hours for a single WorkDay entry */
+export function calculateDayHours(entry: WorkDay): number {
+  const [sh, sm] = entry.startTime.split(':').map(Number)
+  const [eh, em] = entry.endTime.split(':').map(Number)
+  const startMinutes = sh * 60 + sm
+  const endMinutes = eh * 60 + em
+  const workedMinutes = endMinutes - startMinutes - entry.breakMinutes
+  return Math.max(0, workedMinutes / 60)
+}
+
+/** Count business days (Mon-Fri) between two dates inclusive */
+export function countBusinessDays(startDate: string, endDate: string): number {
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  let count = 0
+  const current = new Date(start)
+  while (current <= end) {
+    const day = current.getDay()
+    if (day !== 0 && day !== 6) count++
+    current.setDate(current.getDate() + 1)
+  }
+  return count
+}
+
+/** Calculate comprehensive stats for a period */
+export function calculatePeriodStats(
+  entries: WorkDay[],
+  contractHoursPerWeek: number,
+  startDate: string,
+  endDate: string
+): PeriodStats {
+  if (entries.length === 0) {
+    const workingDays = countBusinessDays(startDate, endDate)
+    const weeks = workingDays / 5
+    return {
+      totalWorkedHours: 0,
+      totalContractHours: contractHoursPerWeek * weeks,
+      diffHours: -(contractHoursPerWeek * weeks),
+      avgDailyHours: 0,
+      minDailyHours: 0,
+      maxDailyHours: 0,
+      totalDays: 0,
+      totalWorkingDays: workingDays,
+      avgBreakMinutes: 0,
+      entries: [],
+    }
+  }
+
+  const dailyHours = entries.map(calculateDayHours)
+  const totalWorkedHours = dailyHours.reduce((a, b) => a + b, 0)
+  const totalBreakMinutes = entries.reduce((a, e) => a + e.breakMinutes, 0)
+  const workingDays = countBusinessDays(startDate, endDate)
+  const weeks = workingDays / 5
+  const totalContractHours = contractHoursPerWeek * weeks
+
+  return {
+    totalWorkedHours,
+    totalContractHours,
+    diffHours: totalWorkedHours - totalContractHours,
+    avgDailyHours: totalWorkedHours / entries.length,
+    minDailyHours: Math.min(...dailyHours),
+    maxDailyHours: Math.max(...dailyHours),
+    totalDays: entries.length,
+    totalWorkingDays: workingDays,
+    avgBreakMinutes: totalBreakMinutes / entries.length,
+    entries,
+  }
+}
+
+/** Format hours as Xh YYmin */
+export function formatHours(hours: number): string {
+  const h = Math.floor(Math.abs(hours))
+  const m = Math.round((Math.abs(hours) - h) * 60)
+  const sign = hours < 0 ? '-' : ''
+  return m > 0 ? `${sign}${h}h${m.toString().padStart(2, '0')}` : `${sign}${h}h`
+}
+
+/** Format a diff with sign and color class */
+export function formatDiff(hours: number): { text: string; className: string } {
+  const prefix = hours > 0 ? '+' : ''
+  return {
+    text: `${prefix}${formatHours(hours)}`,
+    className: hours > 0 ? 'text-red-600' : hours < 0 ? 'text-orange-600' : 'text-green-600',
+  }
+}
+
+/** Get French day name */
+export function getFrenchDay(dateStr: string): string {
+  const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
+  return days[new Date(dateStr + 'T12:00:00').getDay()]
+}
+
+/** Format date as "Lun. 7 mai 2026" */
+export function formatDateFr(dateStr: string): string {
+  const date = new Date(dateStr + 'T12:00:00')
+  return date.toLocaleDateString('fr-FR', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
 }

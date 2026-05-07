@@ -1,24 +1,30 @@
 export interface Employee {
   id: string
   name: string
-  email: string
+  contractHours: number // 35, 39, or custom weekly hours
   createdAt: string
 }
 
-export interface TimeEntry {
+export interface WorkDay {
   id: string
   employeeId: string
-  checkIn: string
-  checkOut: string | null
-  breakTime: number
+  date: string // YYYY-MM-DD
+  startTime: string // HH:MM
+  endTime: string // HH:MM
+  breakMinutes: number // lunch/break duration in minutes
+  notes: string
   createdAt: string
 }
 
-export interface DailyReport {
-  employeeId: string
-  employeeName: string
-  date: string
-  entries: TimeEntry[]
-  totalHours: number
-  totalBreakTime: number
+export interface PeriodStats {
+  totalWorkedHours: number
+  totalContractHours: number
+  diffHours: number // positive = overtime, negative = undertime
+  avgDailyHours: number
+  minDailyHours: number
+  maxDailyHours: number
+  totalDays: number
+  totalWorkingDays: number // business days in period
+  avgBreakMinutes: number
+  entries: WorkDay[]
 }

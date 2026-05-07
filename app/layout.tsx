@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Time Tracker",
-  description: "Employee time tracking and reporting system",
+  title: "Mes Heures - Suivi du temps de travail",
+  description: "Suivez vos heures de travail, comparez avec votre contrat et gardez le controle sur votre temps.",
 }
 
 export const viewport = {
@@ -30,10 +30,10 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="fr"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col bg-gray-50 text-gray-900">{children}</body>
     </html>
   );
 }

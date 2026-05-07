@@ -24,56 +24,38 @@ async function writeLocalJson<T>(name: string, data: T[]): Promise<void> {
 
 async function readBlobJson<T>(name: string): Promise<T[]> {
   try {
-    console.log(`[readBlobJson] Reading ${name}`)
-    const blob = await import('@vercel/blob')
-    const key = `time-tracker-prod/${name}.json`
+    const { list } = await import('@vercel/blob')
+    const blobKey = `time-tracker/${name}.json`
+    const { blobs } = await list({ prefix: blobKey, limit: 1 })
 
-    console.log(`[readBlobJson] Calling blob.head() for ${key}`)
-    const head = await blob.head(key)
-    console.log(`[readBlobJson] head() success, size: ${head.size}`)
-
-    if (!head.size) {
-      console.log(`[readBlobJson] Empty blob, returning []`)
+    if (blobs.length === 0) {
       return []
     }
 
-    // For private blobs, use downloadUrl which contains temp auth token
-    console.log(`[readBlobJson] Fetching from downloadUrl`)
-    const res = await fetch(head.downloadUrl)
-    console.log(`[readBlobJson] Fetch status: ${res.status}`)
+    const blob = blobs[0]
+    const res = await fetch(blob.downloadUrl)
 
     if (!res.ok) {
-      console.error(`[readBlobJson] Fetch failed with status ${res.status}`)
-      const text = await res.text()
-      console.error(`[readBlobJson] Response body: ${text.substring(0, 200)}`)
+      console.error(`[readBlobJson] Fetch failed for ${name}: ${res.status}`)
       return []
     }
 
     const data = await res.json()
-    console.log(`[readBlobJson] Successfully read ${data.length} items`)
-    return data
+    return Array.isArray(data) ? data : []
   } catch (err) {
-    console.error(`[readBlobJson] Error:`, err instanceof Error ? err.message : String(err))
-    console.error(`[readBlobJson] Stack:`, err instanceof Error ? err.stack : '')
+    console.error(`[readBlobJson] Error reading ${name}:`, err instanceof Error ? err.message : String(err))
     return []
   }
 }
 
 async function writeBlobJson<T>(name: string, data: T[]): Promise<void> {
-  try {
-    console.log(`[writeBlobJson] Writing ${data.length} items to ${name}`)
-    const { put } = await import('@vercel/blob')
-    const result = await put(`time-tracker-prod/${name}.json`, JSON.stringify(data), {
-      access: 'private',
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType: 'application/json',
-    })
-    console.log(`[writeBlobJson] Successfully wrote to ${name}, URL: ${result.url}`)
-  } catch (err) {
-    console.error(`[writeBlobJson] Error:`, err instanceof Error ? err.message : String(err))
-    throw err
-  }
+  const { put } = await import('@vercel/blob')
+  await put(`time-tracker/${name}.json`, JSON.stringify(data), {
+    access: 'public',
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: 'application/json',
+  })
 }
 
 function useBlob(): boolean {
@@ -85,21 +67,24 @@ export async function getAll<T>(collection: string): Promise<T[]> {
   return readLocalJson<T>(collection)
 }
 
+export async function saveAll<T>(collection: string, data: T[]): Promise<void> {
+  if (useBlob()) await writeBlobJson(collection, data)
+  else await writeLocalJson(collection, data)
+}
+
 export async function upsert<T extends { id: string }>(collection: string, item: T): Promise<T> {
   const all = await getAll<T>(collection)
   const idx = all.findIndex((i) => (i as { id: string }).id === item.id)
   if (idx >= 0) all[idx] = item
   else all.push(item)
-  if (useBlob()) await writeBlobJson(collection, all)
-  else await writeLocalJson(collection, all)
+  await saveAll(collection, all)
   return item
 }
 
-export async function remove(collection: string, id: string): Promise<void> {
+export async function removeItem(collection: string, id: string): Promise<void> {
   const all = await getAll<{ id: string }>(collection)
   const filtered = all.filter((i) => i.id !== id)
-  if (useBlob()) await writeBlobJson(collection, filtered)
-  else await writeLocalJson(collection, filtered)
+  await saveAll(collection, filtered)
 }
 
 export async function getById<T extends { id: string }>(collection: string, id: string): Promise<T | null> {

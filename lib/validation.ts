@@ -1,16 +1,18 @@
 import { z } from 'zod'
 
 export const employeeSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100),
-  email: z.string().email('Invalid email address'),
+  name: z.string().min(1, 'Le nom est requis').max(100),
+  contractHours: z.number().min(1).max(60).default(35),
 })
 
-export const timeEntrySchema = z.object({
-  employeeId: z.string().min(1, 'Employee ID is required'),
-  checkIn: z.string().datetime('Invalid date format'),
-  checkOut: z.string().datetime('Invalid date format').nullable().default(null),
-  breakTime: z.number().min(0, 'Break time cannot be negative').default(0),
+export const workDaySchema = z.object({
+  employeeId: z.string().min(1),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format de date invalide (YYYY-MM-DD)'),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Format invalide (HH:MM)'),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Format invalide (HH:MM)'),
+  breakMinutes: z.number().min(0).max(480).default(60),
+  notes: z.string().max(500).default(''),
 })
 
 export type EmployeeInput = z.infer<typeof employeeSchema>
-export type TimeEntryInput = z.infer<typeof timeEntrySchema>
+export type WorkDayInput = z.infer<typeof workDaySchema>
