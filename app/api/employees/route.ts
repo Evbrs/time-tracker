@@ -32,6 +32,10 @@ export async function POST(request: Request) {
     await upsert('employees', employee)
     return NextResponse.json(employee, { status: 201 })
   } catch (err) {
-    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+    console.error('[POST /api/employees]', err instanceof Error ? err.stack : String(err))
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Erreur serveur' },
+      { status: 500 }
+    )
   }
 }

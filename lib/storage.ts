@@ -24,25 +24,36 @@ async function writeLocalJson<T>(name: string, data: T[]): Promise<void> {
 
 async function readBlobJson<T>(name: string): Promise<T[]> {
   try {
-    const { list } = await import('@vercel/blob')
-    const blobKey = `time-tracker/${name}.json`
-    const { blobs } = await list({ prefix: blobKey, limit: 1 })
+    const { get, BlobNotFoundError } = await import('@vercel/blob')
+    const result = await get(`time-tracker/${name}.json`, { access: 'private' })
 
-    if (blobs.length === 0) {
+    if (!result || !result.stream) {
       return []
     }
 
-    const blob = blobs[0]
-    const res = await fetch(blob.downloadUrl)
-
-    if (!res.ok) {
-      console.error(`[readBlobJson] Fetch failed for ${name}: ${res.status}`)
-      return []
+    const reader = result.stream.getReader()
+    const chunks: Uint8Array[] = []
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value) chunks.push(value)
     }
-
-    const data = await res.json()
+    const text = new TextDecoder().decode(
+      chunks.reduce((acc, chunk) => {
+        const tmp = new Uint8Array(acc.length + chunk.length)
+        tmp.set(acc, 0)
+        tmp.set(chunk, acc.length)
+        return tmp
+      }, new Uint8Array(0))
+    )
+    const data = JSON.parse(text)
     return Array.isArray(data) ? data : []
   } catch (err) {
+    // BlobNotFoundError means the file doesn't exist yet — return empty
+    const { BlobNotFoundError } = await import('@vercel/blob')
+    if (err instanceof BlobNotFoundError) {
+      return []
+    }
     console.error(`[readBlobJson] Error reading ${name}:`, err instanceof Error ? err.message : String(err))
     return []
   }
@@ -51,7 +62,7 @@ async function readBlobJson<T>(name: string): Promise<T[]> {
 async function writeBlobJson<T>(name: string, data: T[]): Promise<void> {
   const { put } = await import('@vercel/blob')
   await put(`time-tracker/${name}.json`, JSON.stringify(data), {
-    access: 'public',
+    access: 'private',
     addRandomSuffix: false,
     allowOverwrite: true,
     contentType: 'application/json',
