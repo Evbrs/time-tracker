@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getById, upsert, removeItem } from '@/lib/storage'
 import { WorkDay } from '@/lib/types'
 
+export const dynamic = 'force-dynamic'
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params

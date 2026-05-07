@@ -4,6 +4,13 @@ import { WorkDay } from '@/lib/types'
 import { workDaySchema } from '@/lib/validation'
 import { generateId } from '@/lib/utils'
 
+export const dynamic = 'force-dynamic'
+
+const noCacheHeaders = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+  Pragma: 'no-cache',
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -30,7 +37,7 @@ export async function GET(request: Request) {
     // Sort by date descending
     entries.sort((a, b) => b.date.localeCompare(a.date))
 
-    return NextResponse.json(entries)
+    return NextResponse.json(entries, { headers: noCacheHeaders })
   } catch (err) {
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }

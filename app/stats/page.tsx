@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Employee, PeriodStats, WorkDay } from '@/lib/types'
 import { getDateString, formatHours, formatDiff, formatDateFr, calculateDayHours } from '@/lib/utils'
-import { ArrowLeft, Calendar, Download, TrendingUp, Clock, Minus, Plus } from 'lucide-react'
+import { ArrowLeft, Calendar, Download, TrendingUp, Clock, Minus, Plus, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 
 type PresetPeriod = '1w' | '2w' | '1m' | '2m' | '3m' | '6m' | 'custom'
@@ -67,7 +67,8 @@ export default function StatsPage() {
     setLoading(true)
     try {
       const res = await fetch(
-        `/api/stats?employeeId=${employeeId}&startDate=${startDate}&endDate=${endDate}`
+        `/api/stats?employeeId=${employeeId}&startDate=${startDate}&endDate=${endDate}&_t=${Date.now()}`,
+        { cache: 'no-store' }
       )
       if (res.ok) {
         const data = await res.json()
@@ -164,6 +165,14 @@ export default function StatsPage() {
             >
               <Download className="h-4 w-4" />
               Exporter CSV
+            </button>
+            <button
+              onClick={loadStats}
+              disabled={loading}
+              className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              title="Rafraichir"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>

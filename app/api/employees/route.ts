@@ -4,10 +4,17 @@ import { Employee } from '@/lib/types'
 import { employeeSchema } from '@/lib/validation'
 import { generateId } from '@/lib/utils'
 
+export const dynamic = 'force-dynamic'
+
+const noCacheHeaders = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+  Pragma: 'no-cache',
+}
+
 export async function GET() {
   try {
     const employees = await getAll<Employee>('employees')
-    return NextResponse.json(employees)
+    return NextResponse.json(employees, { headers: noCacheHeaders })
   } catch (err) {
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }

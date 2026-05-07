@@ -3,6 +3,13 @@ import { getAll, getById } from '@/lib/storage'
 import { Employee, WorkDay } from '@/lib/types'
 import { calculatePeriodStats } from '@/lib/utils'
 
+export const dynamic = 'force-dynamic'
+
+const noCacheHeaders = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+  Pragma: 'no-cache',
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -29,10 +36,13 @@ export async function GET(request: Request) {
 
     const stats = calculatePeriodStats(entries, employee.contractHours, startDate, endDate)
 
-    return NextResponse.json({
-      employee: { id: employee.id, name: employee.name, contractHours: employee.contractHours },
-      stats,
-    })
+    return NextResponse.json(
+      {
+        employee: { id: employee.id, name: employee.name, contractHours: employee.contractHours },
+        stats,
+      },
+      { headers: noCacheHeaders }
+    )
   } catch (err) {
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }

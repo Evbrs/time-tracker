@@ -39,7 +39,9 @@ export default function Home() {
 
   const loadEntries = useCallback(async () => {
     if (!currentEmployeeId) return
-    const res = await fetch(`/api/workdays?employeeId=${currentEmployeeId}`)
+    const res = await fetch(`/api/workdays?employeeId=${currentEmployeeId}&_t=${Date.now()}`, {
+      cache: 'no-store',
+    })
     if (res.ok) {
       const data = await res.json()
       setRecentEntries(data.slice(0, 14))
@@ -54,7 +56,7 @@ export default function Home() {
   }, [currentEmployeeId, loadEntries])
 
   async function loadEmployees() {
-    const res = await fetch('/api/employees')
+    const res = await fetch(`/api/employees?_t=${Date.now()}`, { cache: 'no-store' })
     if (res.ok) {
       const data = await res.json()
       setEmployees(data)
@@ -112,6 +114,10 @@ export default function Home() {
           }),
         })
         if (res.ok) {
+          const updated = await res.json()
+          setRecentEntries((prev) =>
+            prev.map((e) => (e.id === updated.id ? updated : e))
+          )
           setEntrySuccess('Saisie mise a jour.')
           setEditingId(null)
           resetEntryForm()
@@ -132,6 +138,8 @@ export default function Home() {
           }),
         })
         if (res.ok) {
+          const newEntry = await res.json()
+          setRecentEntries((prev) => [newEntry, ...prev].slice(0, 14))
           setEntrySuccess('Journee enregistree !')
           resetEntryForm()
           loadEntries()
@@ -169,6 +177,7 @@ export default function Home() {
 
   async function handleDelete(id: string) {
     if (!confirm('Supprimer cette saisie ?')) return
+    setRecentEntries((prev) => prev.filter((e) => e.id !== id))
     await fetch(`/api/workdays/${id}`, { method: 'DELETE' })
     loadEntries()
   }
