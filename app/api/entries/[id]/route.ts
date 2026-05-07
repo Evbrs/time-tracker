@@ -11,12 +11,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Entry not found' }, { status: 404 })
   }
 
-  const updated: TimeEntry = {
-    ...entry,
-    ...body,
-  }
+  const updated = { ...entry, ...body }
 
-  await upsert('entries', updated)
+  await upsert('entries', updated as TimeEntry)
   return NextResponse.json(updated)
 }
 

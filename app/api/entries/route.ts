@@ -30,13 +30,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: validation.error.errors }, { status: 400 })
   }
 
-  const entry: TimeEntry = {
+  const entry = {
     id: generateId(),
-    ...validation.data,
+    employeeId: validation.data.employeeId,
+    checkIn: validation.data.checkIn,
     checkOut: validation.data.checkOut || null,
+    breakTime: validation.data.breakTime,
     createdAt: new Date().toISOString(),
   }
 
-  await upsert('entries', entry)
+  await upsert('entries', entry as TimeEntry)
   return NextResponse.json(entry, { status: 201 })
 }
