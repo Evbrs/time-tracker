@@ -121,7 +121,7 @@ export default function Home() {
           setEntrySuccess('Saisie mise a jour.')
           setEditingId(null)
           resetEntryForm()
-          loadEntries()
+          setTimeout(loadEntries, 1500)
         }
       } else {
         // Create new
@@ -139,10 +139,13 @@ export default function Home() {
         })
         if (res.ok) {
           const newEntry = await res.json()
-          setRecentEntries((prev) => [newEntry, ...prev].slice(0, 14))
+          setRecentEntries((prev) => {
+            const filtered = prev.filter((e) => e.date !== newEntry.date)
+            return [newEntry, ...filtered].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 14)
+          })
           setEntrySuccess('Journee enregistree !')
           resetEntryForm()
-          loadEntries()
+          setTimeout(loadEntries, 1500)
         } else {
           const data = await res.json()
           setEntryError(typeof data.error === 'string' ? data.error : 'Erreur lors de la saisie.')
@@ -179,7 +182,7 @@ export default function Home() {
     if (!confirm('Supprimer cette saisie ?')) return
     setRecentEntries((prev) => prev.filter((e) => e.id !== id))
     await fetch(`/api/workdays/${id}`, { method: 'DELETE' })
-    loadEntries()
+    setTimeout(loadEntries, 1500)
   }
 
   function switchProfile() {
