@@ -1,65 +1,146 @@
-import Image from "next/image";
+'use client'
+
+import { useEffect, useState } from 'react'
+import { Employee, TimeEntry } from '@/lib/types'
+import { getDateString } from '@/lib/utils'
+import { EmployeeForm } from '@/components/EmployeeForm'
+import { TimeEntryCard } from '@/components/TimeEntryCard'
+import { Clock } from 'lucide-react'
 
 export default function Home() {
+  const [employees, setEmployees] = useState<Employee[]>([])
+  const [entries, setEntries] = useState<TimeEntry[]>([])
+  const [loading, setLoading] = useState(false)
+  const [todayDate] = useState(() => getDateString())
+
+  useEffect(() => {
+    loadEmployees()
+    loadEntries()
+    const interval = setInterval(() => {
+      loadEntries()
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [])
+
+  async function loadEmployees() {
+    const res = await fetch('/api/employees')
+    const data = await res.json()
+    setEmployees(data)
+  }
+
+  async function loadEntries() {
+    const res = await fetch(`/api/entries?date=${todayDate}`)
+    const data = await res.json()
+    setEntries(data)
+  }
+
+  async function handleAddEmployee(employee: Omit<Employee, 'id' | 'createdAt'>) {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/employees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(employee),
+      })
+      if (!res.ok) throw new Error('Failed to add employee')
+      await loadEmployees()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleCheckIn(employeeId: string) {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/entries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId,
+          checkIn: new Date().toISOString(),
+          checkOut: null,
+          breakTime: 0,
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to check in')
+      await loadEntries()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleCheckOut(entryId: string) {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/entries/${entryId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          checkOut: new Date().toISOString(),
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to check out')
+      await loadEntries()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getActiveEntry = (employeeId: string) => {
+    return entries.find((e) => e.employeeId === employeeId && !e.checkOut) ?? null
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-gray-50">
+      <header className="border-b border-gray-200 bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3">
+            <Clock className="h-8 w-8 text-blue-600" />
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Time Tracker</h1>
+              <p className="text-sm text-gray-600">Track employee work hours</p>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </header>
+
+      <main className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+        <div className="grid gap-8 lg:grid-cols-3">
+          <div>
+            <EmployeeForm onSubmit={handleAddEmployee} loading={loading} />
+          </div>
+
+          <div className="lg:col-span-2">
+            <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+              {employees.length === 0 ? (
+                <div className="col-span-full rounded-lg border border-gray-200 bg-white p-6 text-center">
+                  <p className="text-gray-500">No employees added yet</p>
+                </div>
+              ) : (
+                employees.map((employee) => (
+                  <TimeEntryCard
+                    key={employee.id}
+                    employee={employee}
+                    onCheckIn={() => handleCheckIn(employee.id)}
+                    onCheckOut={handleCheckOut}
+                    activeEntry={getActiveEntry(employee.id)}
+                    loading={loading}
+                  />
+                ))
+              )}
+            </div>
+          </div>
         </div>
+
+        <nav>
+          <a
+            href="/reports"
+            className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          >
+            View Reports
+          </a>
+        </nav>
       </main>
     </div>
-  );
+  )
 }
