@@ -23,22 +23,34 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const body = await request.json()
+  try {
+    console.log('[POST /api/entries] Received request')
+    const body = await request.json()
+    console.log('[POST /api/entries] Body:', body)
 
-  const validation = timeEntrySchema.safeParse(body)
-  if (!validation.success) {
-    return NextResponse.json({ error: validation.error.errors }, { status: 400 })
+    const validation = timeEntrySchema.safeParse(body)
+    console.log('[POST /api/entries] Validation success:', validation.success)
+    if (!validation.success) {
+      console.log('[POST /api/entries] Validation errors:', validation.error.errors)
+      return NextResponse.json({ error: validation.error.errors }, { status: 400 })
+    }
+
+    const entry: TimeEntry = {
+      id: generateId(),
+      employeeId: validation.data.employeeId,
+      checkIn: validation.data.checkIn,
+      checkOut: validation.data.checkOut || null,
+      breakTime: validation.data.breakTime,
+      createdAt: new Date().toISOString(),
+    }
+    console.log('[POST /api/entries] Created entry:', entry.id)
+
+    await upsert('entries', entry)
+    console.log('[POST /api/entries] Upsert complete')
+    return NextResponse.json(entry, { status: 201 })
+  } catch (err) {
+    console.error('[POST /api/entries] Error:', err instanceof Error ? err.message : String(err))
+    console.error('[POST /api/entries] Stack:', err instanceof Error ? err.stack : '')
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 })
   }
-
-  const entry: TimeEntry = {
-    id: generateId(),
-    employeeId: validation.data.employeeId,
-    checkIn: validation.data.checkIn,
-    checkOut: validation.data.checkOut || null,
-    breakTime: validation.data.breakTime,
-    createdAt: new Date().toISOString(),
-  }
-
-  await upsert('entries', entry)
-  return NextResponse.json(entry, { status: 201 })
 }

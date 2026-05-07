@@ -23,22 +23,46 @@ async function writeLocalJson<T>(name: string, data: T[]): Promise<void> {
 }
 
 async function readBlobJson<T>(name: string): Promise<T[]> {
-  const { list } = await import('@vercel/blob')
-  const { blobs } = await list({ prefix: `time-tracker/${name}.json`, limit: 1 })
-  if (blobs.length === 0) return []
-  const res = await fetch(blobs[0].downloadUrl)
-  if (!res.ok) return []
-  return res.json()
+  try {
+    console.log(`[readBlobJson] Reading ${name}`)
+    const { list } = await import('@vercel/blob')
+    const { blobs } = await list({ prefix: `time-tracker/${name}.json`, limit: 1 })
+    console.log(`[readBlobJson] Found ${blobs.length} blobs for ${name}`)
+    if (blobs.length === 0) {
+      console.log(`[readBlobJson] No blobs found, returning []`)
+      return []
+    }
+    console.log(`[readBlobJson] Fetching from ${blobs[0].downloadUrl}`)
+    const res = await fetch(blobs[0].downloadUrl)
+    console.log(`[readBlobJson] Fetch status: ${res.status}`)
+    if (!res.ok) {
+      console.error(`[readBlobJson] Fetch failed with status ${res.status}`)
+      return []
+    }
+    const data = await res.json()
+    console.log(`[readBlobJson] Successfully read ${data.length} items`)
+    return data
+  } catch (err) {
+    console.error(`[readBlobJson] Error:`, err instanceof Error ? err.message : String(err))
+    return []
+  }
 }
 
 async function writeBlobJson<T>(name: string, data: T[]): Promise<void> {
-  const { put } = await import('@vercel/blob')
-  await put(`time-tracker/${name}.json`, JSON.stringify(data), {
-    access: 'public',
-    addRandomSuffix: false,
-    allowOverwrite: true,
-    contentType: 'application/json',
-  })
+  try {
+    console.log(`[writeBlobJson] Writing ${data.length} items to ${name}`)
+    const { put } = await import('@vercel/blob')
+    const result = await put(`time-tracker/${name}.json`, JSON.stringify(data), {
+      access: 'public',
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: 'application/json',
+    })
+    console.log(`[writeBlobJson] Successfully wrote to ${name}, URL: ${result.url}`)
+  } catch (err) {
+    console.error(`[writeBlobJson] Error:`, err instanceof Error ? err.message : String(err))
+    throw err
+  }
 }
 
 function useBlob(): boolean {
