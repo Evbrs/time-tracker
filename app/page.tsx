@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Employee, WorkDay } from '@/lib/types'
 import { getDateString, calculateDayHours, formatHours, formatDateFr } from '@/lib/utils'
-import { Clock, BarChart3, Plus, Trash2, Edit2, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
+import { Clock, BarChart3, Plus, Trash2, Edit2, ChevronLeft, ChevronRight, LogOut, CalendarDays, CalendarRange } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Home() {
@@ -18,7 +18,18 @@ export default function Home() {
   const [formContractHours, setFormContractHours] = useState(35)
 
   // Entry form
+  const [entryMode, setEntryMode] = useState<'day' | 'range'>('day')
   const [entryDate, setEntryDate] = useState(() => getDateString())
+  const [rangeStart, setRangeStart] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+    return d.toISOString().split('T')[0]
+  })
+  const [rangeEnd, setRangeEnd] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 4)
+    const today = getDateString()
+    const fri = d.toISOString().split('T')[0]
+    return fri > today ? today : fri
+  })
   const [entryStart, setEntryStart] = useState('09:00')
   const [entryEnd, setEntryEnd] = useState('17:30')
   const [entryBreak, setEntryBreak] = useState(60)
@@ -123,8 +134,45 @@ export default function Home() {
           resetEntryForm()
           setTimeout(loadEntries, 1500)
         }
+      } else if (entryMode === 'range') {
+        // Batch create for range
+        const res = await fetch('/api/workdays/batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employeeId: currentEmployeeId,
+            startDate: rangeStart,
+            endDate: rangeEnd,
+            startTime: entryStart,
+            endTime: entryEnd,
+            breakMinutes: entryBreak,
+            notes: entryNotes,
+          }),
+        })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.totalCreated > 0) {
+            setRecentEntries((prev) => {
+              const newAll = [...data.created, ...prev]
+              const seen = new Set<string>()
+              return newAll
+                .filter((e: WorkDay) => { if (seen.has(e.date)) return false; seen.add(e.date); return true })
+                .sort((a: WorkDay, b: WorkDay) => b.date.localeCompare(a.date))
+                .slice(0, 14)
+            })
+          }
+          const parts: string[] = []
+          if (data.totalCreated > 0) parts.push(`${data.totalCreated} jour${data.totalCreated > 1 ? 's' : ''} enregistre${data.totalCreated > 1 ? 's' : ''}`)
+          if (data.totalSkipped > 0) parts.push(`${data.totalSkipped} ignore${data.totalSkipped > 1 ? 's' : ''} (deja saisis)`)
+          setEntrySuccess(parts.join(', '))
+          resetEntryForm()
+          setTimeout(loadEntries, 1500)
+        } else {
+          const data = await res.json()
+          setEntryError(typeof data.error === 'string' ? data.error : 'Erreur lors de la saisie.')
+        }
       } else {
-        // Create new
+        // Create single
         const res = await fetch('/api/workdays', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -153,7 +201,7 @@ export default function Home() {
       }
     } finally {
       setLoading(false)
-      setTimeout(() => setEntrySuccess(''), 3000)
+      setTimeout(() => setEntrySuccess(''), 4000)
     }
   }
 
@@ -167,6 +215,7 @@ export default function Home() {
   }
 
   function startEdit(entry: WorkDay) {
+    setEntryMode('day')
     setEditingId(entry.id)
     setEntryDate(entry.date)
     setEntryStart(entry.startTime)
@@ -358,9 +407,39 @@ export default function Home() {
       <main className="mx-auto max-w-4xl px-4 py-6 space-y-6">
         {/* Entry Form */}
         <form onSubmit={handleSubmitEntry} className="rounded-xl border border-gray-200 bg-white p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900">
-            {editingId ? 'Modifier la saisie' : 'Saisir mes heures'}
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">
+              {editingId ? 'Modifier la saisie' : 'Saisir mes heures'}
+            </h2>
+            {!editingId && (
+              <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+                <button
+                  type="button"
+                  onClick={() => setEntryMode('day')}
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    entryMode === 'day'
+                      ? 'bg-white text-indigo-700 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  Journee
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEntryMode('range')}
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    entryMode === 'range'
+                      ? 'bg-white text-indigo-700 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <CalendarRange className="h-3.5 w-3.5" />
+                  Periode
+                </button>
+              </div>
+            )}
+          </div>
 
           {entryError && (
             <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">{entryError}</div>
@@ -370,39 +449,78 @@ export default function Home() {
           )}
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label htmlFor="entry-date" className="block text-sm font-medium text-gray-700 mb-1">
-                Date
-              </label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => adjustDate(-1)}
-                  className="rounded-lg border border-gray-300 p-2 hover:bg-gray-50"
-                  aria-label="Jour precedent"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <input
-                  id="entry-date"
-                  type="date"
-                  value={entryDate}
-                  onChange={(e) => setEntryDate(e.target.value)}
-                  max={getDateString()}
-                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => adjustDate(1)}
-                  disabled={entryDate >= getDateString()}
-                  className="rounded-lg border border-gray-300 p-2 hover:bg-gray-50 disabled:opacity-40"
-                  aria-label="Jour suivant"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
+            {entryMode === 'day' ? (
+              <div className="sm:col-span-2">
+                <label htmlFor="entry-date" className="block text-sm font-medium text-gray-700 mb-1">
+                  Date
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => adjustDate(-1)}
+                    className="rounded-lg border border-gray-300 p-2 hover:bg-gray-50"
+                    aria-label="Jour precedent"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <input
+                    id="entry-date"
+                    type="date"
+                    value={entryDate}
+                    onChange={(e) => setEntryDate(e.target.value)}
+                    max={getDateString()}
+                    className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => adjustDate(1)}
+                    disabled={entryDate >= getDateString()}
+                    className="rounded-lg border border-gray-300 p-2 hover:bg-gray-50 disabled:opacity-40"
+                    aria-label="Jour suivant"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-gray-400">{formatDateFr(entryDate)}</p>
               </div>
-              <p className="mt-1 text-xs text-gray-400">{formatDateFr(entryDate)}</p>
-            </div>
+            ) : (
+              <>
+                <div>
+                  <label htmlFor="range-start" className="block text-sm font-medium text-gray-700 mb-1">
+                    Du
+                  </label>
+                  <input
+                    id="range-start"
+                    type="date"
+                    value={rangeStart}
+                    onChange={(e) => setRangeStart(e.target.value)}
+                    max={getDateString()}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">{formatDateFr(rangeStart)}</p>
+                </div>
+                <div>
+                  <label htmlFor="range-end" className="block text-sm font-medium text-gray-700 mb-1">
+                    Au
+                  </label>
+                  <input
+                    id="range-end"
+                    type="date"
+                    value={rangeEnd}
+                    onChange={(e) => setRangeEnd(e.target.value)}
+                    max={getDateString()}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">{formatDateFr(rangeEnd)}</p>
+                </div>
+                <div className="sm:col-span-2">
+                  <p className="text-xs text-indigo-600 bg-indigo-50 rounded-lg px-3 py-2">
+                    Les memes horaires seront appliques a chaque jour ouvre (lun-ven) de la periode.
+                    Les jours deja saisis seront ignores.
+                  </p>
+                </div>
+              </>
+            )}
 
             <div>
               <label htmlFor="entry-start" className="block text-sm font-medium text-gray-700 mb-1">
