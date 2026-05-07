@@ -1,3 +1,4 @@
+import { NextResponse } from 'next/server'
 import { getAll, upsert } from '@/lib/storage'
 import { Employee } from '@/lib/types'
 import { employeeSchema } from '@/lib/validation'
@@ -5,9 +6,7 @@ import { generateId } from '@/lib/utils'
 
 export async function GET() {
   const employees = await getAll<Employee>('employees')
-  return new Response(JSON.stringify(employees), {
-    headers: { 'Content-Type': 'application/json' },
-  })
+  return NextResponse.json(employees)
 }
 
 export async function POST(request: Request) {
@@ -15,22 +14,16 @@ export async function POST(request: Request) {
 
   const validation = employeeSchema.safeParse(body)
   if (!validation.success) {
-    return new Response(JSON.stringify({ error: validation.error.errors }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return NextResponse.json({ error: validation.error.errors }, { status: 400 })
   }
 
-  const employee = {
+  const employee: Employee = {
     id: generateId(),
     name: validation.data.name,
     email: validation.data.email,
     createdAt: new Date().toISOString(),
   }
 
-  await upsert('employees', employee as Employee)
-  return new Response(JSON.stringify(employee), {
-    status: 201,
-    headers: { 'Content-Type': 'application/json' },
-  })
+  await upsert('employees', employee)
+  return NextResponse.json(employee, { status: 201 })
 }

@@ -23,24 +23,12 @@ async function writeLocalJson<T>(name: string, data: T[]): Promise<void> {
 }
 
 async function readBlobJson<T>(name: string): Promise<T[]> {
-  try {
-    const { get } = await import('@vercel/blob')
-    const key = `time-tracker/${name}.json`
-    const result = await get(key, { access: 'private' })
-    if (!result || !result.stream) return []
-    const reader = result.stream.getReader()
-    const decoder = new TextDecoder()
-    let text = ''
-    let done = false
-    while (!done) {
-      const { value, done: streamDone } = await reader.read()
-      if (value) text += decoder.decode(value, { stream: true })
-      done = streamDone
-    }
-    return JSON.parse(text)
-  } catch {
-    return []
-  }
+  const { list } = await import('@vercel/blob')
+  const { blobs } = await list({ prefix: `time-tracker/${name}.json`, limit: 1 })
+  if (blobs.length === 0) return []
+  const res = await fetch(blobs[0].downloadUrl)
+  if (!res.ok) return []
+  return res.json()
 }
 
 async function writeBlobJson<T>(name: string, data: T[]): Promise<void> {
