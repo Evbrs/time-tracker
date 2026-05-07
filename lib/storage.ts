@@ -25,25 +25,36 @@ async function writeLocalJson<T>(name: string, data: T[]): Promise<void> {
 async function readBlobJson<T>(name: string): Promise<T[]> {
   try {
     console.log(`[readBlobJson] Reading ${name}`)
-    const { list } = await import('@vercel/blob')
-    const { blobs } = await list({ prefix: `time-tracker/${name}.json`, limit: 1 })
-    console.log(`[readBlobJson] Found ${blobs.length} blobs for ${name}`)
-    if (blobs.length === 0) {
-      console.log(`[readBlobJson] No blobs found, returning []`)
+    const blob = await import('@vercel/blob')
+    const key = `time-tracker/${name}.json`
+
+    console.log(`[readBlobJson] Calling blob.head() for ${key}`)
+    const head = await blob.head(key)
+    console.log(`[readBlobJson] head() success, size: ${head.size}`)
+
+    if (!head.size) {
+      console.log(`[readBlobJson] Empty blob, returning []`)
       return []
     }
-    console.log(`[readBlobJson] Fetching from ${blobs[0].downloadUrl}`)
-    const res = await fetch(blobs[0].downloadUrl)
+
+    // For private blobs, use downloadUrl which contains temp auth token
+    console.log(`[readBlobJson] Fetching from downloadUrl`)
+    const res = await fetch(head.downloadUrl)
     console.log(`[readBlobJson] Fetch status: ${res.status}`)
+
     if (!res.ok) {
       console.error(`[readBlobJson] Fetch failed with status ${res.status}`)
+      const text = await res.text()
+      console.error(`[readBlobJson] Response body: ${text.substring(0, 200)}`)
       return []
     }
+
     const data = await res.json()
     console.log(`[readBlobJson] Successfully read ${data.length} items`)
     return data
   } catch (err) {
     console.error(`[readBlobJson] Error:`, err instanceof Error ? err.message : String(err))
+    console.error(`[readBlobJson] Stack:`, err instanceof Error ? err.stack : '')
     return []
   }
 }
