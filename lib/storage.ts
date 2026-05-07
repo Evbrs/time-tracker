@@ -26,7 +26,7 @@ async function readBlobJson<T>(name: string): Promise<T[]> {
   try {
     console.log(`[readBlobJson] Reading ${name}`)
     const blob = await import('@vercel/blob')
-    const key = `time-tracker/${name}.json`
+    const key = `time-tracker-prod/${name}.json`
 
     console.log(`[readBlobJson] Calling blob.head() for ${key}`)
     const head = await blob.head(key)
@@ -63,7 +63,7 @@ async function writeBlobJson<T>(name: string, data: T[]): Promise<void> {
   try {
     console.log(`[writeBlobJson] Writing ${data.length} items to ${name}`)
     const { put } = await import('@vercel/blob')
-    const result = await put(`time-tracker/${name}.json`, JSON.stringify(data), {
+    const result = await put(`time-tracker-prod/${name}.json`, JSON.stringify(data), {
       access: 'private',
       addRandomSuffix: false,
       allowOverwrite: true,
