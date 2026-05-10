@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { Employee, PeriodStats, WorkDay } from '@/lib/types'
-import { getDateString, formatHours, formatDiff, formatDateFr, calculateDayHours } from '@/lib/utils'
-import { ArrowLeft, Calendar, Download, TrendingUp, Clock, Minus, Plus, RefreshCw } from 'lucide-react'
+import { getDateString, formatHours, formatDiff, formatDateFr, calculateDayHours, getHolidayName } from '@/lib/utils'
+import { ArrowLeft, Calendar, Download, TrendingUp, Clock, Minus, Plus, RefreshCw, CalendarOff, Palmtree } from 'lucide-react'
 import Link from 'next/link'
 
 type PresetPeriod = '1w' | '2w' | '1m' | '2m' | '3m' | '6m' | 'custom'
@@ -96,10 +96,11 @@ export default function StatsPage() {
   function handleExportCSV() {
     if (!stats || !employee) return
 
-    const headers = ['Date', 'Debut', 'Fin', 'Pause (min)', 'Heures travaillees', 'Notes']
+    const headers = ['Date', 'Type', 'Debut', 'Fin', 'Pause (min)', 'Heures travaillees', 'Notes']
     const rows = stats.entries.map((e) => {
       const hours = calculateDayHours(e)
-      return [e.date, e.startTime, e.endTime, e.breakMinutes, hours.toFixed(2), `"${e.notes}"`].join(';')
+      const type = e.dayType === 'leave' ? 'Conge' : e.dayType === 'holiday_worked' ? 'Ferie travaille' : 'Travail'
+      return [e.date, type, e.startTime, e.endTime, e.breakMinutes, hours.toFixed(2), `"${e.notes}"`].join(';')
     })
 
     const summary = [
@@ -112,6 +113,9 @@ export default function StatsPage() {
       `Max/jour;${stats.maxDailyHours.toFixed(2)}`,
       `Jours saisis;${stats.totalDays}`,
       `Jours ouvres;${stats.totalWorkingDays}`,
+      `Jours feries (sem.);${stats.totalHolidays}`,
+      `Feries travailles;${stats.totalHolidaysWorked}`,
+      `Jours de conge;${stats.totalLeaveDays}`,
     ]
 
     const csv = [headers.join(';'), ...rows, ...summary].join('\n')
@@ -158,22 +162,24 @@ export default function StatsPage() {
                 )}
               </div>
             </div>
-            <button
-              onClick={handleExportCSV}
-              disabled={!stats || stats.totalDays === 0}
-              className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-            >
-              <Download className="h-4 w-4" />
-              Exporter CSV
-            </button>
-            <button
-              onClick={loadStats}
-              disabled={loading}
-              className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-              title="Rafraichir"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleExportCSV}
+                disabled={!stats || stats.totalDays === 0}
+                className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              >
+                <Download className="h-4 w-4" />
+                CSV
+              </button>
+              <button
+                onClick={loadStats}
+                disabled={loading}
+                className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                title="Rafraichir"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -285,6 +291,48 @@ export default function StatsPage() {
               </div>
             </div>
 
+            {/* Holidays & Leave cards */}
+            {(stats.totalHolidays > 0 || stats.totalLeaveDays > 0 || stats.totalHolidaysWorked > 0) && (
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="flex items-center gap-2 text-sm text-amber-700 mb-1">
+                    <CalendarOff className="h-4 w-4" />
+                    Jours feries (sem.)
+                  </div>
+                  <div className="text-2xl font-bold text-amber-800">{stats.totalHolidays}</div>
+                  {stats.totalHolidaysWorked > 0 && (
+                    <div className="text-xs text-amber-600 mt-1">
+                      dont {stats.totalHolidaysWorked} travaille{stats.totalHolidaysWorked > 1 ? 's' : ''}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  <div className="flex items-center gap-2 text-sm text-emerald-700 mb-1">
+                    <Palmtree className="h-4 w-4" />
+                    Jours de conge
+                  </div>
+                  <div className="text-2xl font-bold text-emerald-800">{stats.totalLeaveDays}</div>
+                  <div className="text-xs text-emerald-600 mt-1">
+                    poses sur la periode
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-white p-4">
+                  <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
+                    <Calendar className="h-4 w-4" />
+                    Jours effectifs
+                  </div>
+                  <div className="text-2xl font-bold text-gray-900">
+                    {stats.totalWorkingDays - stats.totalLeaveDays}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    ouvres - conges
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Min/Max bar */}
             {stats.totalDays > 0 && (
               <div className="rounded-xl border border-gray-200 bg-white p-4">
@@ -337,6 +385,7 @@ export default function StatsPage() {
                     <thead>
                       <tr className="border-b border-gray-200 bg-gray-50">
                         <th className="px-4 py-2 text-left font-medium text-gray-600">Date</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-600">Type</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-600">Horaires</th>
                         <th className="px-4 py-2 text-center font-medium text-gray-600">Pause</th>
                         <th className="px-4 py-2 text-right font-medium text-gray-600">Heures</th>
@@ -350,29 +399,62 @@ export default function StatsPage() {
                         const contractDaily = (employee?.contractHours ?? 35) / 5
                         const entryDiff = hours - contractDaily
                         const diffFormatted = formatDiff(entryDiff)
+                        const dayType = entry.dayType || 'work'
+                        const isLeave = dayType === 'leave'
+                        const holiday = getHolidayName(entry.date)
                         return (
-                          <tr key={entry.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <tr
+                            key={entry.id}
+                            className={`border-b border-gray-100 hover:bg-gray-50 ${
+                              isLeave ? 'bg-emerald-50/50' : dayType === 'holiday_worked' ? 'bg-amber-50/50' : ''
+                            }`}
+                          >
                             <td className="px-4 py-2 text-gray-900 whitespace-nowrap">{formatDateFr(entry.date)}</td>
+                            <td className="px-4 py-2">
+                              {isLeave ? (
+                                <span className="inline-flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-medium">
+                                  <Palmtree className="h-3 w-3" />
+                                  Conge
+                                </span>
+                              ) : dayType === 'holiday_worked' ? (
+                                <span className="inline-flex items-center gap-1 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
+                                  <CalendarOff className="h-3 w-3" />
+                                  Ferie
+                                </span>
+                              ) : holiday ? (
+                                <span className="text-xs text-amber-600">{holiday}</span>
+                              ) : (
+                                <span className="text-xs text-gray-400">-</span>
+                              )}
+                            </td>
                             <td className="px-4 py-2 text-gray-600">
-                              {entry.ranges && entry.ranges.length > 0
-                                ? entry.ranges.map((r, i) => (
-                                    <span key={i}>
-                                      {i > 0 && <span className="text-gray-300 mx-1">|</span>}
-                                      {r.start}-{r.end}
-                                    </span>
-                                  ))
-                                : <span className="whitespace-nowrap">{entry.startTime} - {entry.endTime}</span>
-                              }
+                              {isLeave ? (
+                                <span className="text-xs text-gray-400">-</span>
+                              ) : entry.ranges && entry.ranges.length > 0 ? (
+                                entry.ranges.map((r, i) => (
+                                  <span key={i}>
+                                    {i > 0 && <span className="text-gray-300 mx-1">|</span>}
+                                    {r.start}-{r.end}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="whitespace-nowrap">{entry.startTime} - {entry.endTime}</span>
+                              )}
                             </td>
                             <td className="px-4 py-2 text-center text-gray-500">
-                              {entry.ranges && entry.ranges.length > 0
-                                ? <span className="text-xs text-indigo-500">{entry.ranges.length} plages</span>
-                                : `${entry.breakMinutes}min`
-                              }
+                              {isLeave ? (
+                                '-'
+                              ) : entry.ranges && entry.ranges.length > 0 ? (
+                                <span className="text-xs text-indigo-500">{entry.ranges.length} plages</span>
+                              ) : (
+                                `${entry.breakMinutes}min`
+                              )}
                             </td>
-                            <td className="px-4 py-2 text-right font-medium text-gray-900">{formatHours(hours)}</td>
-                            <td className={`px-4 py-2 text-right font-medium ${diffFormatted.className}`}>
-                              {diffFormatted.text}
+                            <td className="px-4 py-2 text-right font-medium text-gray-900">
+                              {isLeave ? '-' : formatHours(hours)}
+                            </td>
+                            <td className={`px-4 py-2 text-right font-medium ${isLeave ? 'text-gray-400' : diffFormatted.className}`}>
+                              {isLeave ? '-' : diffFormatted.text}
                             </td>
                             <td className="px-4 py-2 text-gray-400 max-w-[200px] truncate">{entry.notes || '-'}</td>
                           </tr>
@@ -381,7 +463,7 @@ export default function StatsPage() {
                     </tbody>
                     <tfoot>
                       <tr className="bg-gray-50 font-medium">
-                        <td className="px-4 py-3 text-gray-900" colSpan={3}>Total</td>
+                        <td className="px-4 py-3 text-gray-900" colSpan={4}>Total</td>
                         <td className="px-4 py-3 text-right text-gray-900">{formatHours(stats.totalWorkedHours)}</td>
                         <td className={`px-4 py-3 text-right ${diff?.className}`}>{diff?.text}</td>
                         <td className="px-4 py-3"></td>
@@ -392,7 +474,7 @@ export default function StatsPage() {
               </div>
             )}
 
-            {stats.totalDays === 0 && (
+            {stats.totalDays === 0 && stats.totalLeaveDays === 0 && (
               <div className="rounded-xl border border-gray-200 bg-white p-8 text-center">
                 <p className="text-gray-500">Aucune saisie sur cette periode.</p>
                 <Link href="/" className="text-indigo-600 hover:text-indigo-700 text-sm mt-2 inline-block">

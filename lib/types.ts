@@ -10,6 +10,8 @@ export interface TimeRange {
   end: string // HH:MM
 }
 
+export type DayType = 'work' | 'holiday_worked' | 'leave'
+
 export interface WorkDay {
   id: string
   employeeId: string
@@ -18,6 +20,7 @@ export interface WorkDay {
   endTime: string // HH:MM - used in simple mode
   breakMinutes: number // break duration in minutes - used in simple mode
   ranges?: TimeRange[] // optional: multiple time slots per day
+  dayType?: DayType // 'work' (default), 'holiday_worked', or 'leave'
   notes: string
   createdAt: string
 }
@@ -30,7 +33,10 @@ export interface PeriodStats {
   minDailyHours: number
   maxDailyHours: number
   totalDays: number
-  totalWorkingDays: number // business days in period
+  totalWorkingDays: number // business days in period (excluding holidays)
+  totalHolidays: number // public holidays on weekdays in period
+  totalLeaveDays: number // leave days taken
+  totalHolidaysWorked: number // holidays where employee worked
   avgBreakMinutes: number
   entries: WorkDay[]
 }

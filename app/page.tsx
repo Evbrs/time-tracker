@@ -1,12 +1,24 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Employee, WorkDay, TimeRange } from '@/lib/types'
-import { getDateString, calculateDayHours, calculateRangeHours, formatHours, formatDateFr } from '@/lib/utils'
-import { Clock, BarChart3, Plus, Trash2, Edit2, ChevronLeft, ChevronRight, LogOut, X } from 'lucide-react'
+import { Employee, WorkDay, TimeRange, DayType } from '@/lib/types'
+import { getDateString, calculateDayHours, calculateRangeHours, formatHours, formatDateFr, isFrenchHoliday, getHolidayName } from '@/lib/utils'
+import { Clock, BarChart3, Plus, Trash2, Edit2, ChevronLeft, ChevronRight, LogOut, X, CalendarOff, Palmtree, Briefcase } from 'lucide-react'
 import Link from 'next/link'
 
 type EntryMode = 'simple' | 'ranges'
+
+const DAY_TYPE_LABELS: Record<DayType, string> = {
+  work: 'Jour travaille',
+  holiday_worked: 'Ferie travaille',
+  leave: 'Conge',
+}
+
+const DAY_TYPE_BADGES: Record<DayType, { bg: string; text: string; label: string }> = {
+  work: { bg: 'bg-gray-100', text: 'text-gray-600', label: '' },
+  holiday_worked: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Ferie' },
+  leave: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Conge' },
+}
 
 export default function Home() {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -22,6 +34,7 @@ export default function Home() {
   // Entry form
   const [entryMode, setEntryMode] = useState<EntryMode>('simple')
   const [entryDate, setEntryDate] = useState(() => getDateString())
+  const [entryDayType, setEntryDayType] = useState<DayType>('work')
   // Simple mode
   const [entryStart, setEntryStart] = useState('09:00')
   const [entryEnd, setEntryEnd] = useState('17:30')
@@ -40,6 +53,18 @@ export default function Home() {
   const [editingId, setEditingId] = useState<string | null>(null)
 
   const currentEmployee = employees.find((e) => e.id === currentEmployeeId) ?? null
+
+  // Detect if selected date is a holiday
+  const holidayName = getHolidayName(entryDate)
+  const isHoliday = !!holidayName
+
+  // Auto-set dayType when navigating to a holiday
+  useEffect(() => {
+    if (editingId) return // don't auto-switch in edit mode
+    if (isHoliday && entryDayType === 'work') {
+      // Don't auto-switch, just let the user see the indicator
+    }
+  }, [entryDate, isHoliday, entryDayType, editingId])
 
   useEffect(() => {
     const savedId = localStorage.getItem('currentEmployeeId')
@@ -98,6 +123,7 @@ export default function Home() {
 
   // Compute preview hours for current form state
   function getPreviewHours(): number {
+    if (entryDayType === 'leave') return 0
     if (entryMode === 'ranges') {
       return entryRanges.reduce((sum, r) => sum + calculateRangeHours(r), 0)
     }
@@ -113,24 +139,26 @@ export default function Home() {
     setEntryError('')
     setEntrySuccess('')
 
-    if (entryMode === 'simple') {
-      if (entryStart >= entryEnd) {
-        setEntryError("L'heure de fin doit etre apres l'heure de debut.")
-        return
-      }
-    } else {
-      if (entryRanges.length === 0) {
-        setEntryError('Ajoutez au moins une plage horaire.')
-        return
-      }
-      for (let i = 0; i < entryRanges.length; i++) {
-        const r = entryRanges[i]
-        const s = r.start.replace(':', '')
-        const e2 = r.end.replace(':', '')
-        // Allow end <= start for overnight ranges (e.g. 21:00-00:00)
-        if (s === e2) {
-          setEntryError(`Plage ${i + 1}: debut et fin identiques.`)
+    // For leave days, skip time validation
+    if (entryDayType !== 'leave') {
+      if (entryMode === 'simple') {
+        if (entryStart >= entryEnd) {
+          setEntryError("L'heure de fin doit etre apres l'heure de debut.")
           return
+        }
+      } else {
+        if (entryRanges.length === 0) {
+          setEntryError('Ajoutez au moins une plage horaire.')
+          return
+        }
+        for (let i = 0; i < entryRanges.length; i++) {
+          const r = entryRanges[i]
+          const s = r.start.replace(':', '')
+          const e2 = r.end.replace(':', '')
+          if (s === e2) {
+            setEntryError(`Plage ${i + 1}: debut et fin identiques.`)
+            return
+          }
         }
       }
     }
@@ -140,10 +168,16 @@ export default function Home() {
       const body: Record<string, unknown> = {
         employeeId: currentEmployeeId,
         date: entryDate,
+        dayType: entryDayType,
         notes: entryNotes,
       }
 
-      if (entryMode === 'ranges') {
+      if (entryDayType === 'leave') {
+        // Leave: no hours needed
+        body.startTime = '00:00'
+        body.endTime = '00:00'
+        body.breakMinutes = 0
+      } else if (entryMode === 'ranges') {
         body.ranges = entryRanges
         body.startTime = entryRanges[0].start
         body.endTime = entryRanges[entryRanges.length - 1].end
@@ -182,7 +216,13 @@ export default function Home() {
             const filtered = prev.filter((e) => e.date !== newEntry.date)
             return [newEntry, ...filtered].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 14)
           })
-          setEntrySuccess('Journee enregistree !')
+          setEntrySuccess(
+            entryDayType === 'leave'
+              ? 'Conge enregistre !'
+              : entryDayType === 'holiday_worked'
+                ? 'Ferie travaille enregistre !'
+                : 'Journee enregistree !'
+          )
           resetEntryForm()
           setTimeout(loadEntries, 1500)
         } else {
@@ -198,6 +238,7 @@ export default function Home() {
 
   function resetEntryForm() {
     setEntryDate(getDateString())
+    setEntryDayType('work')
     setEntryStart('09:00')
     setEntryEnd('17:30')
     setEntryBreak(60)
@@ -212,10 +253,13 @@ export default function Home() {
   function startEdit(entry: WorkDay) {
     setEditingId(entry.id)
     setEntryDate(entry.date)
+    setEntryDayType(entry.dayType || 'work')
     setEntryNotes(entry.notes)
     setEntryError('')
     setEntrySuccess('')
-    if (entry.ranges && entry.ranges.length > 0) {
+    if (entry.dayType === 'leave') {
+      setEntryMode('simple')
+    } else if (entry.ranges && entry.ranges.length > 0) {
       setEntryMode('ranges')
       setEntryRanges(entry.ranges.map((r) => ({ ...r })))
     } else {
@@ -268,6 +312,7 @@ export default function Home() {
 
   /** Format ranges display for entry list */
   function formatEntryTime(entry: WorkDay): string {
+    if (entry.dayType === 'leave') return '-'
     if (entry.ranges && entry.ranges.length > 0) {
       return entry.ranges.map((r) => `${r.start}-${r.end}`).join(' | ')
     }
@@ -438,30 +483,32 @@ export default function Home() {
             <h2 className="text-lg font-semibold text-gray-900">
               {editingId ? 'Modifier la saisie' : 'Saisir mes heures'}
             </h2>
-            <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
-              <button
-                type="button"
-                onClick={() => setEntryMode('simple')}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  entryMode === 'simple'
-                    ? 'bg-white text-indigo-700 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Horaires
-              </button>
-              <button
-                type="button"
-                onClick={() => setEntryMode('ranges')}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  entryMode === 'ranges'
-                    ? 'bg-white text-indigo-700 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Plages
-              </button>
-            </div>
+            {entryDayType !== 'leave' && (
+              <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+                <button
+                  type="button"
+                  onClick={() => setEntryMode('simple')}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    entryMode === 'simple'
+                      ? 'bg-white text-indigo-700 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Horaires
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEntryMode('ranges')}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    entryMode === 'ranges'
+                      ? 'bg-white text-indigo-700 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Plages
+                </button>
+              </div>
+            )}
           </div>
 
           {entryError && (
@@ -471,7 +518,7 @@ export default function Home() {
             <div className="rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-700">{entrySuccess}</div>
           )}
 
-          {/* Date picker - shared */}
+          {/* Date picker */}
           <div>
             <label htmlFor="entry-date" className="block text-sm font-medium text-gray-700 mb-1">
               Date
@@ -490,121 +537,188 @@ export default function Home() {
                 type="date"
                 value={entryDate}
                 onChange={(e) => setEntryDate(e.target.value)}
-                max={getDateString()}
                 className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               />
               <button
                 type="button"
                 onClick={() => adjustDate(1)}
-                disabled={entryDate >= getDateString()}
-                className="rounded-lg border border-gray-300 p-2 hover:bg-gray-50 disabled:opacity-40"
+                className="rounded-lg border border-gray-300 p-2 hover:bg-gray-50"
                 aria-label="Jour suivant"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
-            <p className="mt-1 text-xs text-gray-400">{formatDateFr(entryDate)}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-xs text-gray-400">{formatDateFr(entryDate)}</p>
+              {isHoliday && (
+                <span className="inline-flex items-center gap-1 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                  <CalendarOff className="h-3 w-3" />
+                  {holidayName}
+                </span>
+              )}
+            </div>
           </div>
 
-          {entryMode === 'simple' ? (
-            /* Simple mode: start, end, break */
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="entry-start" className="block text-sm font-medium text-gray-700 mb-1">
-                  Debut
-                </label>
-                <input
-                  id="entry-start"
-                  type="time"
-                  value={entryStart}
-                  onChange={(e) => setEntryStart(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label htmlFor="entry-end" className="block text-sm font-medium text-gray-700 mb-1">
-                  Fin
-                </label>
-                <input
-                  id="entry-end"
-                  type="time"
-                  value={entryEnd}
-                  onChange={(e) => setEntryEnd(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label htmlFor="entry-break" className="block text-sm font-medium text-gray-700 mb-1">
-                  Pause (minutes)
-                </label>
-                <input
-                  id="entry-break"
-                  type="number"
-                  min={0}
-                  max={480}
-                  value={entryBreak}
-                  onChange={(e) => setEntryBreak(Number(e.target.value))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Heures travaillees</label>
-                <div className="rounded-lg bg-indigo-50 border border-indigo-200 px-3 py-2 text-lg font-semibold text-indigo-700">
-                  {formatHours(getPreviewHours())}
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* Ranges mode: multiple time slots */
-            <div className="space-y-3">
-              <div className="space-y-2">
-                {entryRanges.map((range, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-gray-400 w-4 text-right">{idx + 1}</span>
-                    <input
-                      type="time"
-                      value={range.start}
-                      onChange={(e) => updateRange(idx, 'start', e.target.value)}
-                      className="rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                    />
-                    <span className="text-gray-400">-</span>
-                    <input
-                      type="time"
-                      value={range.end}
-                      onChange={(e) => updateRange(idx, 'end', e.target.value)}
-                      className="rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                    />
-                    <span className="text-xs text-gray-400 w-14 text-right">
-                      {formatHours(calculateRangeHours(range))}
-                    </span>
-                    {entryRanges.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeRange(idx)}
-                        className="rounded p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                        title="Supprimer cette plage"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-
+          {/* Day type selector */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Type de journee</label>
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={addRange}
-                className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+                onClick={() => setEntryDayType('work')}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  entryDayType === 'work'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
               >
-                <Plus className="h-4 w-4" />
-                Ajouter une plage
+                <Briefcase className="h-4 w-4" />
+                Jour travaille
               </button>
+              <button
+                type="button"
+                onClick={() => setEntryDayType('holiday_worked')}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  entryDayType === 'holiday_worked'
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <CalendarOff className="h-4 w-4" />
+                Ferie travaille
+              </button>
+              <button
+                type="button"
+                onClick={() => setEntryDayType('leave')}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  entryDayType === 'leave'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <Palmtree className="h-4 w-4" />
+                Conge
+              </button>
+            </div>
+            {entryDayType === 'holiday_worked' && !isHoliday && (
+              <p className="text-xs text-amber-600 mt-1">
+                Note : cette date n&apos;est pas un jour ferie officiel.
+              </p>
+            )}
+          </div>
 
-              <div className="flex items-center justify-between rounded-lg bg-indigo-50 border border-indigo-200 px-3 py-2">
-                <span className="text-sm font-medium text-indigo-700">Total</span>
-                <span className="text-lg font-semibold text-indigo-700">
-                  {formatHours(getPreviewHours())}
-                </span>
+          {/* Hours form - hidden for leave */}
+          {entryDayType !== 'leave' ? (
+            <>
+              {entryMode === 'simple' ? (
+                /* Simple mode: start, end, break */
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="entry-start" className="block text-sm font-medium text-gray-700 mb-1">
+                      Debut
+                    </label>
+                    <input
+                      id="entry-start"
+                      type="time"
+                      value={entryStart}
+                      onChange={(e) => setEntryStart(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="entry-end" className="block text-sm font-medium text-gray-700 mb-1">
+                      Fin
+                    </label>
+                    <input
+                      id="entry-end"
+                      type="time"
+                      value={entryEnd}
+                      onChange={(e) => setEntryEnd(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="entry-break" className="block text-sm font-medium text-gray-700 mb-1">
+                      Pause (minutes)
+                    </label>
+                    <input
+                      id="entry-break"
+                      type="number"
+                      min={0}
+                      max={480}
+                      value={entryBreak}
+                      onChange={(e) => setEntryBreak(Number(e.target.value))}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Heures travaillees</label>
+                    <div className="rounded-lg bg-indigo-50 border border-indigo-200 px-3 py-2 text-lg font-semibold text-indigo-700">
+                      {formatHours(getPreviewHours())}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Ranges mode: multiple time slots */
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    {entryRanges.map((range, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-gray-400 w-4 text-right">{idx + 1}</span>
+                        <input
+                          type="time"
+                          value={range.start}
+                          onChange={(e) => updateRange(idx, 'start', e.target.value)}
+                          className="rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        />
+                        <span className="text-gray-400">-</span>
+                        <input
+                          type="time"
+                          value={range.end}
+                          onChange={(e) => updateRange(idx, 'end', e.target.value)}
+                          className="rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        />
+                        <span className="text-xs text-gray-400 w-14 text-right">
+                          {formatHours(calculateRangeHours(range))}
+                        </span>
+                        {entryRanges.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeRange(idx)}
+                            className="rounded p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            title="Supprimer cette plage"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={addRange}
+                    className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Ajouter une plage
+                  </button>
+
+                  <div className="flex items-center justify-between rounded-lg bg-indigo-50 border border-indigo-200 px-3 py-2">
+                    <span className="text-sm font-medium text-indigo-700">Total</span>
+                    <span className="text-lg font-semibold text-indigo-700">
+                      {formatHours(getPreviewHours())}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            /* Leave mode: just a message */
+            <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-700">
+              <div className="flex items-center gap-2">
+                <Palmtree className="h-5 w-5" />
+                <span>Jour de conge - pas d&apos;heures a saisir</span>
               </div>
             </div>
           )}
@@ -619,7 +733,11 @@ export default function Home() {
               type="text"
               value={entryNotes}
               onChange={(e) => setEntryNotes(e.target.value)}
-              placeholder="Ex: reunion client, deplacement..."
+              placeholder={
+                entryDayType === 'leave'
+                  ? 'Ex: RTT, vacances, conge maladie...'
+                  : 'Ex: reunion client, deplacement...'
+              }
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
             />
           </div>
@@ -628,9 +746,21 @@ export default function Home() {
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 rounded-lg bg-indigo-600 px-4 py-2.5 font-medium text-white hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              className={`flex-1 rounded-lg px-4 py-2.5 font-medium text-white disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors ${
+                entryDayType === 'leave'
+                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  : entryDayType === 'holiday_worked'
+                    ? 'bg-amber-600 hover:bg-amber-700'
+                    : 'bg-indigo-600 hover:bg-indigo-700'
+              }`}
             >
-              {loading ? 'Enregistrement...' : editingId ? 'Mettre a jour' : 'Enregistrer'}
+              {loading
+                ? 'Enregistrement...'
+                : editingId
+                  ? 'Mettre a jour'
+                  : entryDayType === 'leave'
+                    ? 'Poser le conge'
+                    : 'Enregistrer'}
             </button>
             {editingId && (
               <button
@@ -659,34 +789,54 @@ export default function Home() {
                 const contractDaily = (currentEmployee?.contractHours ?? 35) / 5
                 const diff = hours - contractDaily
                 const hasRanges = entry.ranges && entry.ranges.length > 0
+                const dayType = entry.dayType || 'work'
+                const badge = DAY_TYPE_BADGES[dayType]
+                const isLeave = dayType === 'leave'
 
                 return (
                   <div
                     key={entry.id}
-                    className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 hover:bg-gray-100 transition-colors"
+                    className={`flex items-center justify-between rounded-lg border px-4 py-3 hover:bg-gray-100 transition-colors ${
+                      isLeave
+                        ? 'border-emerald-200 bg-emerald-50'
+                        : dayType === 'holiday_worked'
+                          ? 'border-amber-200 bg-amber-50'
+                          : 'border-gray-100 bg-gray-50'
+                    }`}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 flex-wrap">
                         <span className="text-sm font-medium text-gray-900">{formatDateFr(entry.date)}</span>
-                        <span className="text-sm text-gray-500">{formatEntryTime(entry)}</span>
-                        {!hasRanges && entry.breakMinutes > 0 && (
-                          <span className="text-xs text-gray-400">({entry.breakMinutes}min pause)</span>
-                        )}
-                        {hasRanges && (
-                          <span className="text-xs bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded">
-                            {entry.ranges!.length} plages
+                        {badge.label && (
+                          <span className={`text-xs ${badge.bg} ${badge.text} px-1.5 py-0.5 rounded font-medium`}>
+                            {badge.label}
                           </span>
+                        )}
+                        {!isLeave && (
+                          <>
+                            <span className="text-sm text-gray-500">{formatEntryTime(entry)}</span>
+                            {!hasRanges && entry.breakMinutes > 0 && (
+                              <span className="text-xs text-gray-400">({entry.breakMinutes}min pause)</span>
+                            )}
+                            {hasRanges && (
+                              <span className="text-xs bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded">
+                                {entry.ranges!.length} plages
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
                       {entry.notes && <p className="text-xs text-gray-400 mt-0.5 truncate">{entry.notes}</p>}
                     </div>
                     <div className="flex items-center gap-3 ml-4">
-                      <div className="text-right">
-                        <div className="text-sm font-semibold text-gray-900">{formatHours(hours)}</div>
-                        <div className={`text-xs ${diff > 0 ? 'text-red-500' : diff < 0 ? 'text-orange-500' : 'text-green-500'}`}>
-                          {diff > 0 ? '+' : ''}{formatHours(diff)}
+                      {!isLeave && (
+                        <div className="text-right">
+                          <div className="text-sm font-semibold text-gray-900">{formatHours(hours)}</div>
+                          <div className={`text-xs ${diff > 0 ? 'text-red-500' : diff < 0 ? 'text-orange-500' : 'text-green-500'}`}>
+                            {diff > 0 ? '+' : ''}{formatHours(diff)}
+                          </div>
                         </div>
-                      </div>
+                      )}
                       <div className="flex gap-1">
                         <button
                           onClick={() => startEdit(entry)}

@@ -71,6 +71,8 @@ export async function POST(request: Request) {
       startTime: validation.data.startTime,
       endTime: validation.data.endTime,
       breakMinutes: validation.data.breakMinutes,
+      ranges: validation.data.ranges,
+      dayType: validation.data.dayType,
       notes: validation.data.notes,
       createdAt: new Date().toISOString(),
     }

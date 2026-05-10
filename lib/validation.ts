@@ -17,6 +17,7 @@ export const workDaySchema = z.object({
   endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Format invalide (HH:MM)').default('00:00'),
   breakMinutes: z.number().min(0).max(480).default(0),
   ranges: z.array(timeRangeSchema).optional(),
+  dayType: z.enum(['work', 'holiday_worked', 'leave']).default('work'),
   notes: z.string().max(500).default(''),
 })
 
